@@ -1,0 +1,17 @@
+{
+    "name": "chrissileinus/reactphp-systools",
+    "type": "library",
+    "license": "MIT",
+    "autoload": {
+        "psr-4": {
+            "Chrissileinus\\ReactphpSystools\\": "src/"
+        }
+    },
+    "authors": [
+        {
+            "name": "chrissileinus",
+            "email": "chrissileinus@googlemail.com"
+        }
+    ],
+    "require": {}
+}
