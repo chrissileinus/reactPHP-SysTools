@@ -15,7 +15,6 @@ class CPUload
   private static $average = [];
 
   private static $ticks = 1;
-  private static $command = "";
   private static $interval = 1;
   private static $counter = 0;
   private static $pid;
@@ -26,7 +25,6 @@ class CPUload
   public static function init(int $interval = 1)
   {
     self::$ticks = intval(exec('getconf CLK_TCK'));
-    self::$command = "cat /proc/uptime; cat /proc/" . posix_getpid() . "/stat";
     self::$pid = posix_getpid();
     self::$interval = $interval;
 
@@ -58,50 +56,29 @@ class CPUload
 
   private static function collect(): void
   {
-    File::getContent("/proc/uptime")->then(function (string $contents) {
+    File::getContent("/proc/uptime")->then(function (string $uptimeContents) {
       if (preg_match(
         '/(?<upTime>\d+\.\d+) \d+\.\d+/',
-        $contents,
+        $uptimeContents,
         $matches
       )) {
         extract($matches);
-        File::getContent("/proc/" . self::$pid . "/stat")->then(function (string $contents) use ($upTime) {
+        File::getContent("/proc/" . self::$pid . "/stat")->then(function (string $statContents) use ($upTime, $uptimeContents) {
           if (preg_match(
             '/(?: *\S+){13} (?<utime>\d+) (?<stime>\d+) (?<cutime>\d+) (?<cstime>\d+) (?<priority>\d+) (?<nice>\d+) (?<num_threads>\d+) \d+ (?<starttime>\d+) (?<vsize>\d+)/',
-            $contents,
+            $statContents,
             $matches
           )) {
             extract($matches);
 
-            \Chrissileinus\React\Log\Writer::debug(
-              PHP_EOL . $contents,
-              'CPUload'
+            self::$counter++;
+
+            self::setValues(
+              ($utime + $stime) / self::$ticks,
+              $upTime - $starttime / self::$ticks
             );
           }
         });
-      }
-    });
-  }
-
-  private static function runCommand()
-  {
-    \WyriHaximus\React\childProcessPromise(\React\EventLoop\Loop::get(), new \React\ChildProcess\Process(self::$command))->then(function ($result) {
-      // \Chrissileinus\React\Log\Writer::debug(
-      //   PHP_EOL . yaml_emit($result->getStdout()),
-      //   'CPUload'
-      // );
-      if (preg_match(
-        // '/(?<upTime>\d+\.\d+) \d+\.\d+\n(?<pid>\d+) (?<comm>\S+) (?<state>\w) (?<ppid>\d+) (?<pgrp>\d+) (?<session>\d+) (?<tty_nr>\d+) (?<tpgid>\d+) (?<flags>\d+) (?<minflt>\d+) (?<cminflt>\d+) (?<majflt>\d+) (?<cmajflt>\d+) (?<utime>\d+) (?<stime>\d+) (?<cutime>\d+) (?<cstime>\d+) (?<priority>\d+) (?<nice>\d+) (?<num_threads>\d+) (?<itrealvalue>\d+) (?<starttime>\d+) (?<vsize>\d+) (?<rss>\d+) (?<rsslim>\d+) (?<startcode>\d+) (?<endcode>\d+) (?<startstack>\d+) (?<kstkesp>\d+) (?<kstkeip>\d+) (?<signal>\d+) (?<blocked>\d+) (?<sigignore>\d+) (?<sigcatch>\d+) (?<wchan>\d+) (?<nswap>\d+) (?<cnswap>\d+) (?<exit_signal>\d+) (?<processor>\d+) (?<rt_priority>\d+)/',
-        '/(?<upTime>\d+\.\d+) \d+\.\d+\n(?: *\S+){13} (?<utime>\d+) (?<stime>\d+) (?<cutime>\d+) (?<cstime>\d+) (?<priority>\d+) (?<nice>\d+) (?<num_threads>\d+) \d+ (?<starttime>\d+) (?<vsize>\d+)/',
-        $result->getStdout(),
-        $matches
-      )) {
-        self::$counter++;
-
-        self::setValues(
-          ($matches['utime'] + $matches['stime']) / self::$ticks,
-          $matches['upTime'] - $matches['starttime'] / self::$ticks
-        );
       }
     });
   }
