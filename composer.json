@@ -13,5 +13,9 @@
             "email": "chrissileinus@googlemail.com"
         }
     ],
-    "require": {}
+    "require": {
+        "react/promise": "^v2.8.0",
+        "react/event-loop": "^1.2",
+        "react/stream": "^1.2"
+    }
 }
