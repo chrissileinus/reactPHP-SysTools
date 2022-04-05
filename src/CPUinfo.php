@@ -106,7 +106,7 @@ class CPUinfo
   /**
    * a summary info of all cores
    *
-   * @param  [type] ...$filter the entries
+   * @param        ...$filter the entries
    * @return array
    */
   public static function sum(...$filter): array
