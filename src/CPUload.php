@@ -11,24 +11,37 @@ namespace Chrissileinus\React\SysTools;
 
 class CPUload
 {
-  private static $current = 0;
-  private static $average = [];
+  private static float $current = 0;
+  private static array $average = [];
 
-  private static $ticks = 1;
-  private static $interval = 1;
-  private static $counter = 0;
-  private static $pid;
+  private static int $ticks = 1;
+  private static float $interval = 1;
+  private static int $counter = 0;
+  private static int $pid;
 
-  private static $lastUsedTime = 0;
-  private static $lastExecTime = 0;
+  private static float $lastUsedTime = 0;
+  private static float $lastExecTime = 0;
 
-  public static function init(int $interval = 1)
+  private static \React\EventLoop\TimerInterface $timer;
+
+  /**
+   * init and start the periodic collecting of the data
+   *
+   * @param  int      $interval
+   * @param  int|null $pid
+   * @return void
+   */
+  public static function init(float $interval = 1, int $pid = null)
   {
     self::$ticks = intval(exec('getconf CLK_TCK'));
-    self::$pid = posix_getpid();
+    self::$pid = $pid ?: posix_getpid();
     self::$interval = $interval;
 
-    \React\EventLoop\Loop::addPeriodicTimer(self::$interval, function () {
+    self::collect();
+
+    if (isset(self::$timer)) \React\EventLoop\Loop::cancelTimer(self::$timer);
+
+    self::$timer = \React\EventLoop\Loop::addPeriodicTimer(self::$interval, function () {
       self::collect();
     });
   }
@@ -73,28 +86,22 @@ class CPUload
 
             self::$counter++;
 
-            self::setValues(
-              ($utime + $stime) / self::$ticks,
-              $upTime - $starttime / self::$ticks
-            );
+            $procUsedTime = ($utime + $stime) / self::$ticks;
+            $procExecTime = $upTime - $starttime / self::$ticks;
+
+            self::$current = 100 * ($procUsedTime - self::$lastUsedTime) / ($procExecTime - self::$lastExecTime);
+
+            self::$lastUsedTime = $procUsedTime;
+            self::$lastExecTime = $procExecTime;
+
+            foreach (range(1, 15) as $time) {
+              $intervals = min(($time * 60 / self::$interval), self::$counter);
+              if (!array_key_exists($time, self::$average)) self::$average[$time] = self::$current;
+              self::$average[$time] = ((self::$average[$time] * ($intervals - 1)) + self::$current) / $intervals;
+            }
           }
         });
       }
     });
-  }
-
-  private static function setValues(int|float $procUsedTime, int|float $procExecTime)
-  {
-    self::$current = 100 * ($procUsedTime - self::$lastUsedTime) / ($procExecTime - self::$lastExecTime);
-    self::$average[0] = 100 * $procUsedTime / $procExecTime;
-
-    self::$lastUsedTime = $procUsedTime;
-    self::$lastExecTime = $procExecTime;
-
-    foreach (range(1, 15) as $time) {
-      $intervals = min(($time * 60 / self::$interval), self::$counter);
-      if (!array_key_exists($time, self::$average)) self::$average[$time] = self::$current;
-      self::$average[$time] = ((self::$average[$time] * ($intervals - 1)) + self::$current) / $intervals;
-    }
   }
 }
