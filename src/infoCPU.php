@@ -9,9 +9,9 @@
 
 namespace Chrissileinus\React\SysTools;
 
-class CPUinfo
+class infoCPU
 {
-  private static array $info = [];
+  private static array $content = [];
   private static array $statold = [];
   private static float $interval = 1;
   private static array $keyReplacement = [
@@ -47,13 +47,13 @@ class CPUinfo
         if (preg_match('/(.+) *:(.*)/', $entry, $matches)) {
           $name = trim($matches[1]);
           if (isset(self::$keyReplacement[$name])) $name = self::$keyReplacement[$name];
-          self::$info[$id][$name] = trim($matches[2]);
+          self::$content[$id][$name] = trim($matches[2]);
 
-          if (is_numeric(self::$info[$id][$name]))
-            self::$info[$id][$name] = self::$info[$id][$name] + 0;
+          if (is_numeric(self::$content[$id][$name]))
+            self::$content[$id][$name] = self::$content[$id][$name] + 0;
 
-          if (self::$info[$id][$name] == "")
-            self::$info[$id][$name] = null;
+          if (self::$content[$id][$name] == "")
+            self::$content[$id][$name] = null;
         } else {
           $id++;
         }
@@ -77,7 +77,7 @@ class CPUinfo
           self::$statold[$new['core']] = $new;
 
           $cpuTime = $user + $nice + $system + $idle;
-          self::$info[$new['core']]['usage'] = 100 - ($idle * 100 / $cpuTime);
+          self::$content[$new['core']]['usage'] = 100 - ($idle * 100 / $cpuTime);
         }
       }
     });
@@ -93,14 +93,14 @@ class CPUinfo
   {
     if ($filter) {
       $return = [];
-      foreach (self::$info as $id => $entry) {
+      foreach (self::$content as $id => $entry) {
         $return[$id] = array_filter($entry, function ($key) use ($filter) {
           if (is_array($filter)) return in_array($key, $filter);
         }, ARRAY_FILTER_USE_KEY);
       }
       return $return;
     }
-    return self::$info;
+    return self::$content;
   }
 
   /**
@@ -117,7 +117,7 @@ class CPUinfo
       'frequency', 'usage'
     ];
 
-    foreach (self::$info as $id => $entry) {
+    foreach (self::$content as $id => $entry) {
       foreach ($entry as $name => $value) {
         if ($filter && !in_array($name, $filter)) continue;
 
@@ -132,7 +132,7 @@ class CPUinfo
     }
     foreach ($return as $name => $value) {
       if (is_numeric($value) && in_array($name, $toAvg))
-        $return[$name] = $value / count(self::$info);
+        $return[$name] = $value / count(self::$content);
     }
     return $return;
   }
