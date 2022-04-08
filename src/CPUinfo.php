@@ -9,16 +9,13 @@
 
 namespace Chrissileinus\React\SysTools;
 
-class infoCPU
+class CPUinfo
 {
   private static array $content = [];
-  private static array $statold = [];
   private static float $interval = 1;
   private static array $keyReplacement = [
     'cpu MHz' => "frequency"
   ];
-
-  private static \React\EventLoop\TimerInterface $timer;
 
   /**
    * init and start the periodic collecting of the data
@@ -31,19 +28,18 @@ class infoCPU
     self::$interval = $interval;
 
     self::collect();
-
-    if (isset(self::$timer)) \React\EventLoop\Loop::cancelTimer(self::$timer);
-
-    self::$timer = \React\EventLoop\Loop::addPeriodicTimer(self::$interval, function () {
-      self::collect();
-    });
   }
 
   private static function collect()
   {
-    File::getContent("/proc/cpuinfo")->then(function ($content) {
+    static $lastCollect = 0;
+    $now = microtime(true);
+    if ($lastCollect > $now - self::$interval) return;
+    $lastCollect = $now;
+
+    if ($content = file("/proc/cpuinfo")) {
       $id = 0;
-      foreach (explode("\n", $content) as $entry) {
+      foreach ($content as $entry) {
         if (preg_match('/(.+) *:(.*)/', $entry, $matches)) {
           $name = trim($matches[1]);
           if (isset(self::$keyReplacement[$name])) $name = self::$keyReplacement[$name];
@@ -58,29 +54,7 @@ class infoCPU
           $id++;
         }
       }
-    });
-
-    File::getContent("/proc/stat")->then(function (string $content) {
-      foreach (explode("\n", $content) as $entry) {
-        if (preg_match('/cpu(?<core>\d+) (?<user>\d+) (?<nice>\d+) (?<system>\d+) (?<idle>\d+)/', $entry, $matches)) {
-          $new = array_filter($matches, function ($key) {
-            return is_string($key);
-          }, ARRAY_FILTER_USE_KEY);
-
-          if (isset(self::$statold[$new['core']])) {
-            extract(array_combine(array_keys($new), array_map(function ($x, $y) {
-              return $x - $y;
-            }, $new, self::$statold[$new['core']])));
-          } else {
-            extract($new);
-          }
-          self::$statold[$new['core']] = $new;
-
-          $cpuTime = $user + $nice + $system + $idle;
-          self::$content[$new['core']]['usage'] = 100 - ($idle * 100 / $cpuTime);
-        }
-      }
-    });
+    }
   }
 
   /**
@@ -91,6 +65,7 @@ class infoCPU
    */
   public static function get(...$filter): array
   {
+    self::collect();
     if ($filter) {
       $return = [];
       foreach (self::$content as $id => $entry) {
@@ -111,10 +86,11 @@ class infoCPU
    */
   public static function sum(...$filter): array
   {
+    self::collect();
     $return = [];
 
     $toAvg = [
-      'frequency', 'usage'
+      'frequency'
     ];
 
     foreach (self::$content as $id => $entry) {
